@@ -21,29 +21,29 @@ def match_packet_seq(got, expect):
         if tag in ("delete", "replace"):
             wrong.append([("unexpected packet:", pkt) for pkt in got[i1:i2]])
         if tag in ("insert", "replace"):
-            wrong.append([("missing %s:" % n, pkt) for n, pkt in expect[j1:j2]])
+            wrong.append([(f"missing {n}:", pkt) for n, pkt in expect[j1:j2]])
         for seq in wrong:
             bad = True
-            for msg, pkt in seq[:3]:
-                msgs.append(color("red", msg) + "\n" + hexdump(pkt))
+            msgs.extend(color("red", msg) + "\n" + hexdump(pkt) for msg, pkt in seq[:3])
             if seq[3:]:
                 msgs.append("... plus %d more" % len(seq[3:]))
 
         if tag == "equal":
             msgs.append(color("green", "got ") + expect[j1][0])
             if j1 + 1 < j2:
-                msgs[-1] += " through " + expect[j2 - 1][0]
+                msgs[-1] += f" through {expect[j2 - 1][0]}"
     assert not bad, "\n".join(msgs)
 
 def save_pcap_on_fail():
     def save_pcap(fail):
-        save_path = "qemu.pcap." + get_current_test().__name__[5:]
+        save_path = f"qemu.pcap.{get_current_test().__name__[5:]}"
         if fail and os.path.exists("qemu.pcap"):
             shutil.copyfile("qemu.pcap", save_path)
-            print("    Packet capture saved to %s" % save_path)
+            print(f"    Packet capture saved to {save_path}")
         elif not fail and os.path.exists(save_path):
             os.unlink(save_path)
-            print("    (Old %s failed packet capture deleted)" % save_path)
+            print(f"    (Old {save_path} failed packet capture deleted)")
+
     get_current_test().on_finish.append(save_pcap)
 
 def read_pcap():
@@ -61,12 +61,7 @@ def read_pcap():
         yield bytes(f.read(hdr[2]))
 
 def ascii_to_bytes(s):
-    if bytes == str:
-        # Python 2
-        return s
-    else:
-        # Python 3
-        return bytes(s, "ascii")
+    return s if bytes == str else bytes(s, "ascii")
 
 def hexdump(data):
     data = bytearray(data)
@@ -192,7 +187,7 @@ socket.setdefaulttimeout(5)
 @test(15, "tcp echo server [echosrv]")
 def test_echosrv():
     def ready(line):
-        expect = ascii_to_bytes("%s: network server works" % time.time())
+        expect = ascii_to_bytes(f"{time.time()}: network server works")
         got = bytearray()
         sock = socket.socket()
         try:
@@ -205,7 +200,7 @@ def test_echosrv():
                     break
                 got += data
         except socket.error as e:
-            got += "[Socket error: %s]" % e
+            got += f"[Socket error: {e}]"
         finally:
             sock.close()
         assert_equal(got, expect)
@@ -231,17 +226,19 @@ def mk_test_httpd(url, expect_code, expect_data):
             except HTTPError as e:
                 got = "(Status %d)" % e.code
             except IOError as e:
-                got = "(Error: %s)" % e
+                got = f"(Error: {e})"
             expect = "(Status %d)" % expect_code
             if expect_data:
                 expect += "\n" + expect_data
             assert_equal(got, expect)
             raise TerminateTest
+
         save_pcap_on_fail()
         r.user_test("httpd",
                     call_on_line('Waiting for http connections', ready))
         r.match('Waiting for http connections',
                 no=[".*panic"])
+
     test_httpd_test.__name__ += url.replace("/", "-")
     return test(10, fullurl, parent=test_httpd)(test_httpd_test)
 mk_test_httpd("/", 404, "")

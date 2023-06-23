@@ -28,7 +28,7 @@ def test(points, title=None, parent=None):
             assert fn.__name__.startswith("test_")
             title = fn.__name__[5:].replace("_", " ")
         if parent:
-            title = "  " + title
+            title = f"  {title}"
 
         def run_test():
             global TOTAL, POSSIBLE, CURRENT_TEST
@@ -44,7 +44,7 @@ def test(points, title=None, parent=None):
             fail = None
             start = time.time()
             CURRENT_TEST = run_test
-            sys.stdout.write("%s: " % title)
+            sys.stdout.write(f"{title}: ")
             sys.stdout.flush()
             try:
                 fn()
@@ -54,8 +54,7 @@ def test(points, title=None, parent=None):
             # Display and handle test result
             POSSIBLE += points
             if points:
-                print("%s" % \
-                    (color("red", "FAIL") if fail else color("green", "OK")), end=' ')
+                print(f'{color("red", "FAIL") if fail else color("green", "OK")}', end=' ')
             if time.time() - start > 0.1:
                 print("(%.1fs)" % (time.time() - start), end=' ')
             print()
@@ -74,6 +73,7 @@ def test(points, title=None, parent=None):
         run_test.on_finish = []
         TESTS.append(run_test)
         return run_test
+
     return register_test
 
 def end_part(name):
@@ -144,6 +144,7 @@ def assert_lines_match(text, *regexps, **kw):
 
     def assert_lines_match_kw(no=[]):
         return no
+
     no = assert_lines_match_kw(**kw)
 
     # Check text against regexps
@@ -166,7 +167,7 @@ def assert_lines_match(text, *regexps, **kw):
         for offset in range(-2, 3):
             show.add(lineno + offset)
     if regexps:
-        show.update(n for n in range(len(lines) - 5, len(lines)))
+        show.update(iter(range(len(lines) - 5, len(lines))))
 
     msg = []
     last = -1
@@ -184,7 +185,7 @@ def assert_lines_match(text, *regexps, **kw):
     if bad:
         msg.append("unexpected lines in output")
     for r in regexps:
-        msg.append(color("red", "MISSING") + " '%s'" % r)
+        msg.append(color("red", "MISSING") + f" '{r}'")
     raise AssertionError("\n".join(msg))
 
 ##################################################################
@@ -328,7 +329,7 @@ class GDBClient(object):
             data = self.sock.recv(4096).decode("ascii", "replace")
         except socket.error:
             data = ""
-        if data == "":
+        if not data:
             self.sock.close()
             self.sock = None
             return
@@ -338,7 +339,7 @@ class GDBClient(object):
             m = re.search(r"\$([^#]*)#[0-9a-zA-Z]{2}", self.__buf)
             if not m:
                 break
-            pkt = m.group(1)
+            pkt = m[1]
             self.__buf = self.__buf[m.end():]
 
             if pkt.startswith("T05"):
@@ -388,11 +389,12 @@ class Runner():
 
         def run_qemu_kw(target_base="qemu", make_args=[], timeout=30):
             return target_base, make_args, timeout
+
         target_base, make_args, timeout = run_qemu_kw(**kw)
 
         # Start QEMU
         pre_make()
-        self.qemu = QEMU(target_base + "-nox-gdb", *make_args)
+        self.qemu = QEMU(f"{target_base}-nox-gdb", *make_args)
         self.gdb = None
 
         try:
@@ -471,7 +473,7 @@ Failed to shutdown QEMU.  You might need to 'killall qemu' or
         maybe_unlink("obj/kern/init.o", "obj/kern/kernel")
         if kw.pop("snapshot", True):
             kw.setdefault("make_args", []).append("QEMUEXTRA+=-snapshot")
-        self.run_qemu(target_base="run-%s" % binary, *monitors, **kw)
+        self.run_qemu(target_base=f"run-{binary}", *monitors, **kw)
 
     def match(self, *args, **kwargs):
         """Shortcut to call assert_lines_match on the most recent QEMU
@@ -497,13 +499,13 @@ def save(path):
 
     def save_on_finish(fail):
         f.flush()
-        save_path = path + "." + get_current_test().__name__[5:]
+        save_path = f"{path}.{get_current_test().__name__[5:]}"
         if fail:
             shutil.copyfile(path, save_path)
-            print("    QEMU output saved to %s" % save_path)
+            print(f"    QEMU output saved to {save_path}")
         elif os.path.exists(save_path):
             os.unlink(save_path)
-            print("    (Old %s failure log removed)" % save_path)
+            print(f"    (Old {save_path} failure log removed)")
 
     f = open(path, "wb")
     return setup_save
@@ -516,10 +518,11 @@ def stop_breakpoint(addr):
         if isinstance(addr, str):
             addrs = [int(sym[:8], 16) for sym in open("obj/kern/kernel.sym")
                      if sym[11:].strip() == addr]
-            assert len(addrs), "Symbol %s not found" % addr
+            assert len(addrs), f"Symbol {addr} not found"
             runner.gdb.breakpoint(addrs[0])
         else:
             runner.gdb.breakpoint(addr)
+
     return setup_breakpoint
 
 def call_on_line(regexp, callback):
